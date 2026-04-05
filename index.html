@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>₿ BTC DCA Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --card2: #1c2128;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+      --orange: #f0883e;
+      --blue: #388bfd;
+      --btc: #f7931a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', sans-serif; min-height: 100vh; font-size: 14px; }
+
+    /* HEADER */
+    header {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 0.75rem; }
+    .header-left h1 { font-size: 1.25rem; font-weight: 700; }
+    .header-left .icon { font-size: 1.6rem; }
+    .header-sub { color: var(--muted); font-size: 0.78rem; margin-top: 0.1rem; }
+    .header-right { text-align: right; }
+    .header-right .days-count { font-size: 1.4rem; font-weight: 700; color: var(--btc); }
+    .header-right .days-label { color: var(--muted); font-size: 0.75rem; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 1.25rem 1rem; }
+
+    /* PRICE BAR */
+    .price-bar {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 0.9rem 1.25rem; margin-bottom: 1.25rem;
+      display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-end;
+    }
+    .price-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .price-group label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .price-group .input-row { display: flex; gap: 0.5rem; align-items: center; }
+    .price-group input {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 0.45rem 0.75rem; border-radius: 7px; font-size: 0.9rem; width: 190px;
+      transition: border-color 0.2s;
+    }
+    .price-group input:focus { outline: none; border-color: var(--btc); }
+    .price-note { color: var(--muted); font-size: 0.72rem; margin-top: 0.15rem; }
+
+    /* FETCH BUTTON & STATUS */
+    .fetch-group { display: flex; flex-direction: column; gap: 0.4rem; justify-content: flex-end; }
+    .btn-fetch {
+      background: rgba(56,139,253,0.12); color: var(--blue);
+      border: 1px solid rgba(56,139,253,0.3); border-radius: 8px;
+      padding: 0.5rem 1.1rem; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+      display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .btn-fetch:hover { background: rgba(56,139,253,0.2); }
+    .btn-fetch:disabled { opacity: 0.5; cursor: not-allowed; }
+    .fetch-spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(56,139,253,0.3);
+      border-top-color: var(--blue); border-radius: 50%;
+      animation: spin 0.8s linear infinite; display: none;
+    }
+    .btn-fetch.loading .fetch-spinner { display: block; }
+    .btn-fetch.loading .fetch-icon { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fetch-status { font-size: 0.72rem; color: var(--muted); }
+    .fetch-status.ok { color: var(--green); }
+    .fetch-status.err { color: var(--red); }
+    .source-tag {
+      font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem;
+      display: flex; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .source-tag span {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 0.1rem 0.4rem; border-radius: 4px;
+    }
+
+    /* BUTTONS */
+    .btn {
+      padding: 0.45rem 1.1rem; border-radius: 7px; border: none; cursor: pointer;
+      font-size: 0.85rem; font-weight: 600; transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--btc); color: #000; }
+    .btn-success { background: var(--green); color: #000; }
+    .btn-danger { background: #3d1a1a; color: var(--red); border: 1px solid #5c2626; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-blue { background: rgba(56,139,253,0.15); color: var(--blue); border: 1px solid rgba(56,139,253,0.3); }
+    .btn-sm { padding: 0.28rem 0.65rem; font-size: 0.75rem; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* DASHBOARD GRID */
+    .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.9rem; margin-bottom: 1.25rem; }
+    @media (max-width: 750px) { .grid-5 { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 400px) { .grid-5 { grid-template-columns: 1fr; } }
+
+    .metric-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1rem 1.1rem;
+    }
+    .metric-card .m-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.45rem; }
+    .metric-card .m-value { font-size: 1.2rem; font-weight: 700; line-height: 1.2; }
+    .metric-card .m-sub { color: var(--muted); font-size: 0.75rem; margin-top: 0.3rem; }
+    .metric-card.c-btc .m-value { color: var(--btc); }
+    .metric-card.c-green .m-value { color: var(--green); }
+    .metric-card.c-red .m-value { color: var(--red); }
+    .metric-card.c-blue .m-value { color: var(--blue); }
+    .metric-card.c-orange .m-value { color: var(--orange); }
+    .pnl-hint { color: var(--muted); font-size: 0.7rem; font-style: italic; }
+
+    /* SECTION CARD */
+    .section-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      margin-bottom: 1.25rem; overflow: hidden;
+    }
+    .section-header {
+      padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .section-header h2 { font-size: 0.9rem; font-weight: 600; }
+    .section-header .toggle-icon { color: var(--muted); font-size: 0.8rem; transition: transform 0.2s; }
+    .section-header.collapsed .toggle-icon { transform: rotate(-90deg); }
+    .section-body { padding: 1.25rem; }
+    .section-body.hidden { display: none; }
+
+    /* FORM */
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 0.9rem; }
+    .form-group label { display: block; color: var(--muted); font-size: 0.75rem; margin-bottom: 0.3rem; }
+    .form-group input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 0.5rem 0.75rem; border-radius: 7px; font-size: 0.9rem; transition: border-color 0.2s;
+    }
+    .form-group input:focus { outline: none; border-color: var(--btc); }
+    .form-group input[readonly] { color: var(--muted); cursor: default; }
+    .form-group input.filled { border-color: var(--green); background: rgba(63,185,80,0.05); }
+    .form-actions { margin-top: 1rem; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+    .form-hint { color: var(--muted); font-size: 0.78rem; }
+
+    /* ============ SCAN SECTION ============ */
+    .scan-section { border-color: rgba(247,147,26,0.3); }
+    .scan-section .section-header { border-color: rgba(247,147,26,0.2); }
+
+    .scan-body { padding: 1.25rem; }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: 10px;
+      padding: 2rem 1.5rem; text-align: center; cursor: pointer;
+      transition: all 0.2s; position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--btc); background: rgba(247,147,26,0.04);
+    }
+    .drop-zone .dz-icon { font-size: 2.2rem; margin-bottom: 0.5rem; }
+    .drop-zone .dz-text { color: var(--muted); font-size: 0.85rem; }
+    .drop-zone .dz-hint { color: var(--muted); font-size: 0.72rem; margin-top: 0.25rem; }
+    .drop-zone input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+
+    /* Scan workspace */
+    .scan-workspace {
+      display: none; gap: 1.25rem;
+    }
+    .scan-workspace.active { display: flex; flex-wrap: wrap; }
+
+    /* Image preview */
+    .slip-preview-wrap {
+      flex: 0 0 auto; position: relative;
+    }
+    .slip-preview-wrap img {
+      max-height: 280px; max-width: 200px;
+      border-radius: 8px; border: 1px solid var(--border); display: block;
+    }
+    .slip-close {
+      position: absolute; top: -8px; right: -8px;
+      background: var(--red); color: #fff; border: none; cursor: pointer;
+      width: 22px; height: 22px; border-radius: 50%; font-size: 0.75rem;
+      display: flex; align-items: center; justify-content: center; font-weight: 700;
+    }
+
+    /* Scan result area */
+    .scan-right { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 0.85rem; }
+
+    /* Progress */
+    .ocr-progress-wrap { display: none; }
+    .ocr-progress-wrap.active { display: block; }
+    .ocr-progress-bar-bg {
+      background: var(--bg); border-radius: 99px; height: 8px;
+      border: 1px solid var(--border); overflow: hidden; margin-bottom: 0.4rem;
+    }
+    .ocr-progress-bar {
+      height: 100%; background: var(--btc); border-radius: 99px;
+      width: 0%; transition: width 0.3s;
+    }
+    .ocr-progress-label { font-size: 0.78rem; color: var(--muted); }
+
+    /* Extracted result chips */
+    .ocr-result-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem;
+    }
+    .ocr-chip {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+    }
+    .ocr-chip.ok { border-color: var(--green); background: rgba(63,185,80,0.05); }
+    .ocr-chip.fail { border-color: var(--red); background: rgba(248,81,73,0.05); }
+    .ocr-chip .chip-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .ocr-chip .chip-value { font-size: 0.92rem; font-weight: 700; }
+    .ocr-chip.ok .chip-value { color: var(--green); }
+    .ocr-chip.fail .chip-value { color: var(--red); font-size: 0.78rem; }
+
+    .scan-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+    .scan-status { font-size: 0.78rem; color: var(--muted); }
+
+    /* Raw OCR debug (hidden by default) */
+    .ocr-raw {
+      display: none; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.75rem; font-family: monospace;
+      font-size: 0.7rem; color: var(--muted); max-height: 120px; overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .ocr-raw.show { display: block; }
+
+    /* TABLE */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 0.6rem 0.9rem; text-align: left; color: var(--muted);
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border); background: var(--card2);
+      white-space: nowrap;
+    }
+    tbody td { padding: 0.65rem 0.9rem; font-size: 0.83rem; border-bottom: 1px solid #21262d; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,0.025); }
+
+    .badge { display: inline-block; padding: 0.18rem 0.55rem; border-radius: 4px; font-size: 0.68rem; font-weight: 600; }
+    .badge-legacy { background: rgba(56,139,253,0.15); color: var(--blue); }
+    .badge-daily { background: rgba(247,147,26,0.12); color: var(--btc); }
+
+    .empty-state { text-align: center; padding: 2.5rem; color: var(--muted); }
+    .empty-state .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+    .stats-bar {
+      padding: 0.6rem 1.25rem; background: var(--card2); border-bottom: 1px solid var(--border);
+      display: flex; gap: 1.5rem; font-size: 0.78rem; color: var(--muted); flex-wrap: wrap;
+    }
+    .stats-bar span b { color: var(--text); }
+
+    /* TOAST */
+    .toast {
+      position: fixed; bottom: 1.25rem; right: 1.25rem;
+      background: var(--card2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 0.85rem 1.1rem; min-width: 240px; max-width: 320px;
+      z-index: 9999; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transform: translateY(120%); opacity: 0; transition: all 0.3s cubic-bezier(.34,1.56,.64,1);
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast-title { font-weight: 700; font-size: 0.88rem; margin-bottom: 0.2rem; }
+    .toast-msg { font-size: 0.8rem; color: var(--muted); white-space: pre-line; }
+    .toast.t-success { border-color: var(--green); }
+    .toast.t-success .toast-title { color: var(--green); }
+    .toast.t-error { border-color: var(--red); }
+    .toast.t-error .toast-title { color: var(--red); }
+    .toast.t-warn { border-color: var(--orange); }
+    .toast.t-warn .toast-title { color: var(--orange); }
+
+    .text-muted { color: var(--muted); }
+    .text-btc { color: var(--btc); }
+    .text-sm { font-size: 0.78rem; }
+    tr.legacy-row td { background: rgba(56,139,253,0.04); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="icon">₿</span>
+    <div>
+      <h1>BTC DCA Tracker</h1>
+      <div class="header-sub" id="hdr-sub">กำลังโหลด...</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="days-count" id="hdr-days">—</div>
+    <div class="days-label">วันที่ลงทุน</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- PRICE BAR -->
+  <div class="price-bar">
+    <div class="price-group">
+      <label>ราคาเปิดวันนี้ (THB/BTC)</label>
+      <div class="input-row">
+        <input type="number" id="open-price" placeholder="กด 🔄 เพื่อดึงอัตโนมัติ" step="1" />
+        <button class="btn btn-primary" onclick="applyOpenPrice()">คำนวณ PnL</button>
+      </div>
+      <div class="source-tag">
+        <span>Bitkub: <b id="src-bitkub">—</b></span>
+        <span id="src-change" style="display:none"></span>
+      </div>
+    </div>
+    <div class="price-group">
+      <label>อัตราแลกเปลี่ยน (THB/USD)</label>
+      <div class="input-row">
+        <input type="number" id="usd-rate" value="31.41" step="0.01" placeholder="31.41" />
+      </div>
+      <div class="price-note" id="btc-usd-display">1 BTC = — USD</div>
+    </div>
+    <div class="fetch-group">
+      <button class="btn-fetch" id="btn-fetch" onclick="fetchMarketData()">
+        <span class="fetch-icon">🔄</span>
+        <div class="fetch-spinner"></div>
+        ดึงราคาตลาด
+      </button>
+      <div class="fetch-status" id="fetch-status">กด 🔄 หรือ Refresh หน้าจอ</div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="grid-5">
+    <div class="metric-card">
+      <div class="m-label">💰 ลงทุนสะสม</div>
+      <div class="m-value" id="d-cost">—</div>
+      <div class="m-sub" id="d-cost-usd">— USD</div>
+    </div>
+    <div class="metric-card c-btc">
+      <div class="m-label">₿ BTC ที่ถือ</div>
+      <div class="m-value" id="d-btc">—</div>
+      <div class="m-sub" id="d-avg">Avg — THB</div>
+    </div>
+    <div class="metric-card c-orange">
+      <div class="m-label">📈 ราคาเฉลี่ยซื้อ</div>
+      <div class="m-value" id="d-avg-price">—</div>
+      <div class="m-sub" id="d-avg-usd">— USD/BTC</div>
+    </div>
+    <div class="metric-card" id="card-value">
+      <div class="m-label">📊 มูลค่าปัจจุบัน</div>
+      <div class="m-value" id="d-value">—</div>
+      <div class="m-sub" id="d-value-usd">— USD</div>
+    </div>
+    <div class="metric-card" id="card-pnl">
+      <div class="m-label" id="pnl-label">💹 Net PnL</div>
+      <div class="m-value" id="d-pnl">—</div>
+      <div class="m-sub" id="d-pnl-pct"><span class="pnl-hint">กรอกราคาเปิดด้านบน</span></div>
+    </div>
+  </div>
+
+  <!-- ===== SCAN SLIP SECTION ===== -->
+  <div class="section-card scan-section">
+    <div class="section-header" onclick="toggleSection('scan-body', this)">
+      <h2>📎 สแกนสลิปอัตโนมัติ</h2>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="section-body scan-body" id="scan-body">
+
+      <!-- Drop zone -->
+      <div class="drop-zone" id="drop-zone">
+        <div class="dz-icon">🖼️</div>
+        <div class="dz-text">คลิกหรือลากสลิปมาวางที่นี่</div>
+        <div class="dz-hint">รองรับ JPG, PNG, HEIC — ข้อมูลจะถูกดึงอัตโนมัติ</div>
+        <input type="file" id="slip-input" accept="image/*" onchange="handleFileSelect(event)" />
+      </div>
+
+      <!-- Workspace (shown after image load) -->
+      <div class="scan-workspace" id="scan-workspace">
+
+        <!-- Preview -->
+        <div class="slip-preview-wrap">
+          <img id="slip-preview-img" src="" alt="slip preview" />
+          <button class="slip-close" onclick="resetScan()" title="เอาออก">✕</button>
+        </div>
+
+        <!-- Right panel -->
+        <div class="scan-right">
+
+          <!-- Progress -->
+          <div class="ocr-progress-wrap" id="ocr-progress-wrap">
+            <div class="ocr-progress-bar-bg">
+              <div class="ocr-progress-bar" id="ocr-progress-bar"></div>
+            </div>
+            <div class="ocr-progress-label" id="ocr-progress-label">กำลังโหลด...</div>
+          </div>
+
+          <!-- Result chips -->
+          <div class="ocr-result-grid" id="ocr-result-grid" style="display:none;">
+            <div class="ocr-chip" id="chip-date">
+              <div class="chip-label">วันที่</div>
+              <div class="chip-value" id="chip-date-val">—</div>
+            </div>
+            <div class="ocr-chip" id="chip-thb">
+              <div class="chip-label">แลก (THB)</div>
+              <div class="chip-value" id="chip-thb-val">—</div>
+            </div>
+            <div class="ocr-chip" id="chip-btc">
+              <div class="chip-label">ได้รับ (BTC)</div>
+              <div class="chip-value" id="chip-btc-val">—</div>
+            </div>
+            <div class="ocr-chip" id="chip-price">
+              <div class="chip-label">ราคา BTC (THB)</div>
+              <div class="chip-value" id="chip-price-val">—</div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="scan-actions" id="scan-actions" style="display:none;">
+            <button class="btn btn-success" id="btn-use-data" onclick="applyScannedData()">
+              ✓ ใช้ข้อมูลนี้ → เติมฟอร์ม
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="reScan()">สแกนใหม่</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleRaw()">ดู OCR Raw</button>
+          </div>
+
+          <div class="scan-status" id="scan-status"></div>
+
+          <!-- Raw OCR output for debugging -->
+          <div class="ocr-raw" id="ocr-raw"></div>
+
+        </div><!-- end scan-right -->
+      </div><!-- end scan-workspace -->
+    </div>
+  </div>
+
+  <!-- ADD TRANSACTION FORM -->
+  <div class="section-card">
+    <div class="section-header" onclick="toggleSection('form-body', this)">
+      <h2>➕ เพิ่มรายการซื้อ</h2>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="section-body" id="form-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>วันที่</label>
+          <input type="date" id="f-date" />
+        </div>
+        <div class="form-group">
+          <label>แลก (THB)</label>
+          <input type="number" id="f-thb" placeholder="108" step="0.01" min="0" />
+        </div>
+        <div class="form-group">
+          <label>ได้รับ (BTC)</label>
+          <input type="number" id="f-btc" placeholder="0.00004922" step="0.00000001" min="0" />
+        </div>
+        <div class="form-group">
+          <label>ราคา (THB/BTC) — คำนวณอัตโนมัติ</label>
+          <input type="number" id="f-price" placeholder="—" readonly />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="addTransaction()">บันทึก</button>
+        <button class="btn btn-ghost" onclick="clearForm()">ล้างฟอร์ม</button>
+        <span class="form-hint" id="form-hint"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY TABLE -->
+  <div class="section-card">
+    <div class="section-header" onclick="toggleSection('table-body', this)">
+      <h2>📋 ประวัติการซื้อทั้งหมด</h2>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="stats-bar">
+      <span>รายการทั้งหมด: <b id="stat-count">—</b></span>
+      <span>รายวัน: <b id="stat-daily">—</b> รายการ</span>
+      <span>THB รวม: <b id="stat-thb">—</b></span>
+      <span>BTC รวม: <b id="stat-btc">—</b></span>
+    </div>
+    <div class="section-body" id="table-body" style="padding:0;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>วันที่</th><th>THB ที่ใช้</th>
+              <th>BTC ที่ได้</th><th>ราคา BTC (THB)</th>
+              <th>ประเภท</th><th>หมายเหตุ</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tx-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div style="padding:0.75rem 1.25rem; border-top:1px solid var(--border); display:flex; justify-content:flex-end;">
+      <button class="btn btn-danger btn-sm" onclick="confirmReset()">รีเซ็ตเป็นข้อมูลเริ่มต้น</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title" id="toast-title"></div>
+  <div class="toast-msg" id="toast-msg"></div>
+</div>
+
+<script>
+/* ============================================================
+   DATA LAYER
+   ============================================================ */
+const STORAGE_KEY = 'btc_dca_v2';
+
+const LEGACY_ENTRY = {
+  id: '__legacy__',
+  date: '2026-04-04',
+  thbSpent: 16740,
+  btcReceived: 0.00682421,
+  btcPrice: 2453031.14,
+  isLegacy: true,
+  note: 'ข้อมูลสะสม 155 วัน',
+  startDate: '2025-11-01'
+};
+
+function loadStore() {
+  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
+}
+function saveStore(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+function initStore() {
+  let s = loadStore();
+  if (!s) { s = { transactions: [LEGACY_ENTRY], openPrice: 0, usdRate: 31.41 }; saveStore(s); }
+  return s;
+}
+let store = initStore();
+
+/* ============================================================
+   CALCULATIONS & FORMATTING
+   ============================================================ */
+function calcTotals() {
+  let thb = 0, btc = 0;
+  store.transactions.forEach(tx => { thb += tx.thbSpent; btc += tx.btcReceived; });
+  return { thb, btc };
+}
+function getDailyCount() { return store.transactions.filter(tx => !tx.isLegacy).length; }
+function getStartDate() {
+  const l = store.transactions.find(t => t.isLegacy);
+  return l ? (l.startDate || '2025-11-01') : new Date().toISOString().slice(0, 10);
+}
+function calcDays() {
+  return Math.max(1, Math.floor((new Date() - new Date(getStartDate())) / 86400000) + 1);
+}
+function fmtThb(n) { return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtBtc(n) { return n.toFixed(8); }
+function fmtPrice(n) { return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtUsd(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function sign(n) { return n >= 0 ? '+' : ''; }
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render() {
+  const days = calcDays();
+  document.getElementById('hdr-days').textContent = days;
+  document.getElementById('hdr-sub').textContent = `DCA เริ่มต้น ${getStartDate()}`;
+
+  const { thb, btc } = calcTotals();
+  const usdRate = getUsdRate();
+  const openPrice = getOpenPrice();
+
+  document.getElementById('d-cost').textContent = fmtThb(thb) + ' THB';
+  document.getElementById('d-cost-usd').textContent = '≈ ' + fmtUsd(thb / usdRate) + ' USD';
+  document.getElementById('d-btc').textContent = fmtBtc(btc) + ' BTC';
+
+  const avg = btc > 0 ? thb / btc : 0;
+  document.getElementById('d-avg-price').textContent = fmtPrice(avg) + ' THB';
+  document.getElementById('d-avg-usd').textContent = '≈ ' + fmtUsd(avg / usdRate) + ' USD/BTC';
+  document.getElementById('d-avg').textContent = 'Avg ' + fmtPrice(avg) + ' THB';
+
+  if (openPrice > 0) {
+    const curVal = btc * openPrice;
+    const pnl = curVal - thb;
+    const pct = thb > 0 ? (pnl / thb) * 100 : 0;
+    const isGain = pnl >= 0;
+
+    document.getElementById('d-value').textContent = fmtThb(curVal) + ' THB';
+    document.getElementById('d-value-usd').textContent = '≈ ' + fmtUsd(curVal / usdRate) + ' USD';
+    document.getElementById('d-pnl').textContent = sign(pnl) + fmtThb(pnl) + ' THB';
+    document.getElementById('d-pnl-pct').textContent = sign(pct) + pct.toFixed(2) + '%';
+    document.getElementById('card-pnl').className = 'metric-card ' + (isGain ? 'c-green' : 'c-red');
+    document.getElementById('card-value').className = 'metric-card ' + (isGain ? 'c-green' : 'c-red');
+    document.getElementById('pnl-label').textContent = (isGain ? '🟢' : '🔴') + ' Net PnL';
+    document.getElementById('btc-usd-display').textContent = '1 BTC ≈ ' + fmtUsd(openPrice / usdRate) + ' USD';
+  } else {
+    document.getElementById('d-value').textContent = '—';
+    document.getElementById('d-value-usd').textContent = '—';
+    document.getElementById('d-pnl').textContent = '—';
+    document.getElementById('d-pnl-pct').innerHTML = '<span class="pnl-hint">กรอกราคาเปิดด้านบน</span>';
+    document.getElementById('card-pnl').className = 'metric-card';
+    document.getElementById('card-value').className = 'metric-card';
+    document.getElementById('pnl-label').textContent = '💹 Net PnL';
+  }
+
+  // Table
+  const tbody = document.getElementById('tx-tbody');
+  const sorted = [...store.transactions].sort((a, b) => b.date.localeCompare(a.date));
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div>ยังไม่มีรายการ</div></td></tr>`;
+  } else {
+    tbody.innerHTML = sorted.map((tx, i) => `
+      <tr class="${tx.isLegacy ? 'legacy-row' : ''}">
+        <td class="text-muted text-sm">${sorted.length - i}</td>
+        <td>${tx.date}</td>
+        <td>${fmtThb(tx.thbSpent)} <span class="text-muted text-sm">THB</span></td>
+        <td class="text-btc">${fmtBtc(tx.btcReceived)}</td>
+        <td>${fmtPrice(tx.btcPrice)}</td>
+        <td><span class="badge ${tx.isLegacy ? 'badge-legacy' : 'badge-daily'}">${tx.isLegacy ? 'ประวัติสะสม' : 'รายวัน'}</span></td>
+        <td class="text-muted text-sm">${tx.note || ''}</td>
+        <td>${!tx.isLegacy ? `<button class="btn btn-danger btn-sm" onclick="deleteTransaction('${tx.id}')">ลบ</button>` : ''}</td>
+      </tr>`).join('');
+  }
+
+  // Stats
+  const { thb: t2, btc: b2 } = calcTotals();
+  document.getElementById('stat-count').textContent = store.transactions.length;
+  document.getElementById('stat-daily').textContent = getDailyCount();
+  document.getElementById('stat-thb').textContent = fmtThb(t2) + ' THB';
+  document.getElementById('stat-btc').textContent = fmtBtc(b2) + ' BTC';
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+function getOpenPrice() {
+  const v = parseFloat(document.getElementById('open-price').value);
+  return isNaN(v) || v <= 0 ? (store.openPrice || 0) : v;
+}
+function getUsdRate() {
+  const v = parseFloat(document.getElementById('usd-rate').value);
+  return isNaN(v) || v <= 0 ? (store.usdRate || 31.41) : v;
+}
+
+function applyOpenPrice() {
+  const price = parseFloat(document.getElementById('open-price').value);
+  const rate = parseFloat(document.getElementById('usd-rate').value);
+  if (!price || price <= 0) { showToast('warn', 'กรอกราคาก่อน', 'ใส่ราคาเปิด BTC วันนี้ (THB/BTC)'); return; }
+  store.openPrice = price;
+  store.usdRate = isNaN(rate) ? 31.41 : rate;
+  saveStore(store);
+  render();
+  showToast('success', 'อัปเดตแล้ว', 'คำนวณ PnL จากราคา ' + fmtPrice(price) + ' THB/BTC');
+}
+
+function addTransaction() {
+  const dateVal = document.getElementById('f-date').value;
+  const thbVal  = parseFloat(document.getElementById('f-thb').value);
+  const btcVal  = parseFloat(document.getElementById('f-btc').value);
+
+  if (!dateVal) { showToast('error', 'กรอกวันที่', 'ต้องระบุวันที่ก่อน'); return; }
+  if (isNaN(thbVal) || thbVal <= 0) { showToast('error', 'จำนวน THB ผิดพลาด', 'กรอก THB ให้ถูกต้อง'); return; }
+  if (isNaN(btcVal) || btcVal <= 0) { showToast('error', 'จำนวน BTC ผิดพลาด', 'กรอก BTC ให้ถูกต้อง'); return; }
+
+  const byDate = store.transactions.find(tx => !tx.isLegacy && tx.date === dateVal);
+  if (byDate) {
+    showToast('error', 'วันที่ซ้ำ ❌', `มีรายการวันที่ ${dateVal} อยู่แล้ว\n(${fmtBtc(byDate.btcReceived)} BTC)`);
+    return;
+  }
+  const byBtc = store.transactions.find(tx => !tx.isLegacy && Math.abs(tx.btcReceived - btcVal) < 1e-9);
+  if (byBtc) {
+    showToast('error', 'สลิปซ้ำ ❌', `พบรายการ ${fmtBtc(btcVal)} BTC อยู่แล้ว\n(วันที่ ${byBtc.date})`);
+    return;
+  }
+
+  store.transactions.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    date: dateVal, thbSpent: thbVal, btcReceived: btcVal,
+    btcPrice: thbVal / btcVal, isLegacy: false, note: ''
+  });
+  saveStore(store);
+  clearForm();
+  render();
+  showToast('success', 'บันทึกสำเร็จ ✓', `+${fmtBtc(btcVal)} BTC จาก ${fmtThb(thbVal)} THB`);
+}
+
+function deleteTransaction(id) {
+  const tx = store.transactions.find(t => t.id === id);
+  if (!tx || !confirm(`ลบรายการวันที่ ${tx.date}?`)) return;
+  store.transactions = store.transactions.filter(t => t.id !== id);
+  saveStore(store); render();
+  showToast('success', 'ลบแล้ว', `ลบรายการวันที่ ${tx.date}`);
+}
+
+function confirmReset() {
+  if (!confirm('รีเซ็ตเป็นข้อมูลเริ่มต้น?\nรายการรายวันทั้งหมดจะถูกลบ')) return;
+  store.transactions = [LEGACY_ENTRY];
+  saveStore(store); render();
+  showToast('warn', 'รีเซ็ตแล้ว', 'คงข้อมูลสะสม 155 วัน');
+}
+
+function clearForm() {
+  ['f-thb','f-btc','f-price'].forEach(id => {
+    document.getElementById(id).value = '';
+    document.getElementById(id).classList.remove('filled');
+  });
+  document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('f-date').classList.remove('filled');
+  document.getElementById('form-hint').textContent = '';
+}
+
+/* ============================================================
+   OCR — SLIP SCANNING
+   ============================================================ */
+let scannedData = null;
+
+// Drag & drop support
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) processSlipFile(file);
+  else showToast('error', 'ไฟล์ไม่ถูกต้อง', 'กรุณาเลือกไฟล์ภาพ (JPG/PNG/HEIC)');
+});
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processSlipFile(file);
+  e.target.value = ''; // reset so same file can be re-selected
+}
+
+function processSlipFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('slip-preview-img');
+    img.src = ev.target.result;
+    img.onload = () => {
+      showWorkspace();
+      runOCR(img);
+    };
+  };
+  reader.readAsDataURL(file);
+}
+
+function showWorkspace() {
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('scan-workspace').classList.add('active');
+  document.getElementById('ocr-result-grid').style.display = 'none';
+  document.getElementById('scan-actions').style.display = 'none';
+  document.getElementById('ocr-raw').classList.remove('show');
+  document.getElementById('scan-status').textContent = '';
+}
+
+function resetScan() {
+  document.getElementById('drop-zone').style.display = '';
+  document.getElementById('scan-workspace').classList.remove('active');
+  document.getElementById('slip-preview-img').src = '';
+  scannedData = null;
+}
+
+function reScan() {
+  const img = document.getElementById('slip-preview-img');
+  if (img.src) runOCR(img);
+}
+
+// Preprocess: invert dark-background image for better OCR
+function preprocessForOCR(img) {
+  const scale = Math.min(2.5, 1400 / Math.max(img.naturalWidth, 1));
+  const w = Math.round(img.naturalWidth * scale);
+  const h = Math.round(img.naturalHeight * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+
+  // Invert: dark bg → light bg (Tesseract prefers dark text on white)
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i]   = 255 - d[i];
+    d[i+1] = 255 - d[i+1];
+    d[i+2] = 255 - d[i+2];
+    // alpha unchanged
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return canvas;
+}
+
+async function runOCR(img) {
+  const progressWrap = document.getElementById('ocr-progress-wrap');
+  const progressBar  = document.getElementById('ocr-progress-bar');
+  const progressLbl  = document.getElementById('ocr-progress-label');
+  const statusEl     = document.getElementById('scan-status');
+  const rawEl        = document.getElementById('ocr-raw');
+
+  progressWrap.classList.add('active');
+  progressBar.style.width = '0%';
+  progressLbl.textContent = 'กำลังเตรียมภาพ...';
+  document.getElementById('ocr-result-grid').style.display = 'none';
+  document.getElementById('scan-actions').style.display = 'none';
+  statusEl.textContent = '';
+
+  const canvas = preprocessForOCR(img);
+
+  try {
+    const { data: { text } } = await Tesseract.recognize(canvas, 'eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          const pct = Math.round(m.progress * 100);
+          progressBar.style.width = pct + '%';
+          progressLbl.textContent = `กำลังอ่านข้อความ... ${pct}%`;
+        } else if (m.status === 'loading tesseract core') {
+          progressLbl.textContent = 'โหลด Tesseract...';
+        } else if (m.status === 'initializing tesseract') {
+          progressLbl.textContent = 'เตรียม OCR engine...';
+        } else if (m.status === 'loading language traineddata') {
+          progressLbl.textContent = 'โหลดข้อมูลภาษา (ครั้งแรกอาจนาน)...';
+        }
+      }
+    });
+
+    progressBar.style.width = '100%';
+    progressLbl.textContent = 'อ่านเสร็จแล้ว';
+    rawEl.textContent = text;
+
+    const parsed = parseSlipOCR(text);
+    scannedData = parsed;
+    displayOCRResult(parsed);
+
+    setTimeout(() => progressWrap.classList.remove('active'), 800);
+
+  } catch (err) {
+    progressWrap.classList.remove('active');
+    statusEl.textContent = '❌ เกิดข้อผิดพลาด: ' + err.message;
+    showToast('error', 'OCR ล้มเหลว', err.message);
+  }
+}
+
+/* -------------------------------------------------------
+   PARSE: extract slip fields from OCR text
+   -------------------------------------------------------
+   Slip layout (same every time):
+     วันที่       2026-04-05 12:18:14
+     คู่เทรด     BTCTHB
+     แลก          108 THB
+     ได้รับ       0.00004922 BTC
+     ราคา         1 THB = 0.000000455798 BTC
+     ค่าธรรมเนียม 0 BTC
+     ราคาผกผัน   1 BTC = 2193954.7 THB
+   ------------------------------------------------------- */
+function parseSlipOCR(raw) {
+  // Normalize: collapse whitespace, fix common OCR substitutions
+  const t = raw
+    .replace(/[Oo]/g, '0')   // O→0 in numbers (handle carefully)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // --- 1. Date: YYYY-MM-DD --------------------------------
+  const dateM = raw.match(/(\d{4}-\d{2}-\d{2})/);
+  const date = dateM ? dateM[1] : null;
+
+  // --- 2. BTC received ------------------------------------
+  // 0.00004922 BTC — distinctive: "0." followed by 6-10 digits, before BTC
+  // Also handle if OCR drops leading 0: ".00004922 BTC"
+  const btcRecvM = raw.match(/\b(0\.\d{6,10})\s*BTC/i) ||
+                   raw.match(/(\.\d{6,10})\s*BTC/i);
+  const btcReceived = btcRecvM ? parseFloat(btcRecvM[1]) : null;
+
+  // --- 3. THB spent (แลก line) ----------------------------
+  // Look for all "NUMBER THB" occurrences, exclude:
+  //   - "1 THB =" (rate line)
+  //   - very large numbers > 1,000,000 (BTC price)
+  //   - "0 THB" (zero, unlikely purchase)
+  const thbMatches = [...raw.matchAll(/\b(\d+(?:\.\d{1,2})?)\s*THB\b/gi)];
+  let thbSpent = null;
+  for (const m of thbMatches) {
+    const v = parseFloat(m[1]);
+    if (v >= 2 && v < 1000000) { thbSpent = v; break; }
+  }
+
+  // --- 4. BTC price (ราคาผกผัน) --------------------------
+  // "1 BTC = 2193954.7 THB"
+  let btcPrice = null;
+  const btcPriceM = raw.match(/1\s*BTC\s*[=:]\s*([\d,]+(?:\.\d+)?)\s*THB/i);
+  if (btcPriceM) {
+    btcPrice = parseFloat(btcPriceM[1].replace(/,/g, ''));
+  }
+  // Fallback: look for standalone large number (> 1,000,000) near THB
+  if (!btcPrice) {
+    const largeM = raw.match(/\b(\d{7,}(?:\.\d+)?)\s*(?:THB)?/);
+    if (largeM) btcPrice = parseFloat(largeM[1].replace(/,/g, ''));
+  }
+  // Fallback: calculate from thbSpent / btcReceived
+  if (!btcPrice && thbSpent && btcReceived) {
+    btcPrice = thbSpent / btcReceived;
+  }
+
+  return { date, thbSpent, btcReceived, btcPrice };
+}
+
+function displayOCRResult(parsed) {
+  const grid = document.getElementById('ocr-result-grid');
+  const actions = document.getElementById('scan-actions');
+  const statusEl = document.getElementById('scan-status');
+
+  grid.style.display = 'grid';
+  actions.style.display = 'flex';
+
+  function setChip(id, valId, value, label) {
+    const ok = value !== null && value !== undefined;
+    document.getElementById(id).className = 'ocr-chip ' + (ok ? 'ok' : 'fail');
+    document.getElementById(valId).textContent = ok ? label(value) : 'อ่านไม่ได้ — แก้เอง';
+  }
+
+  setChip('chip-date',  'chip-date-val',  parsed.date,        v => v);
+  setChip('chip-thb',   'chip-thb-val',   parsed.thbSpent,    v => fmtThb(v) + ' THB');
+  setChip('chip-btc',   'chip-btc-val',   parsed.btcReceived, v => fmtBtc(v) + ' BTC');
+  setChip('chip-price', 'chip-price-val', parsed.btcPrice,    v => fmtPrice(v));
+
+  const allOk = parsed.date && parsed.thbSpent && parsed.btcReceived;
+  const btnUse = document.getElementById('btn-use-data');
+
+  if (allOk) {
+    statusEl.textContent = '✅ อ่านข้อมูลครบ — กด "ใช้ข้อมูลนี้" เพื่อเติมฟอร์ม';
+    btnUse.disabled = false;
+  } else {
+    statusEl.textContent = '⚠️ อ่านบางค่าไม่ได้ — กรอกที่ขาดในฟอร์มเอง แล้วกด "บันทึก"';
+    btnUse.disabled = false; // still allow partial fill
+  }
+}
+
+function applyScannedData() {
+  if (!scannedData) return;
+  const { date, thbSpent, btcReceived, btcPrice } = scannedData;
+
+  function fill(id, val) {
+    const el = document.getElementById(id);
+    if (val !== null && val !== undefined) {
+      el.value = val;
+      el.classList.add('filled');
+    }
+  }
+
+  fill('f-date', date);
+  fill('f-thb',  thbSpent);
+  fill('f-btc',  btcReceived);
+  fill('f-price', btcPrice ? btcPrice.toFixed(2) : null);
+
+  // Scroll to form
+  document.getElementById('form-body').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  showToast('success', 'เติมข้อมูลแล้ว', 'ตรวจสอบให้ถูกต้องแล้วกด "บันทึก"');
+}
+
+function toggleRaw() {
+  document.getElementById('ocr-raw').classList.toggle('show');
+}
+
+/* ============================================================
+   UI HELPERS
+   ============================================================ */
+function toggleSection(bodyId, header) {
+  document.getElementById(bodyId).classList.toggle('hidden');
+  header.classList.toggle('collapsed');
+}
+
+let toastTimer;
+function showToast(type, title, msg) {
+  const el = document.getElementById('toast');
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-msg').textContent = msg;
+  el.className = `toast t-${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 5000);
+  el.onclick = () => { el.className = 'toast'; };
+}
+
+document.getElementById('f-thb').addEventListener('input', () => {
+  const thb = parseFloat(document.getElementById('f-thb').value);
+  const btc = parseFloat(document.getElementById('f-btc').value);
+  document.getElementById('f-price').value = (!isNaN(thb) && !isNaN(btc) && btc > 0) ? (thb / btc).toFixed(2) : '';
+});
+document.getElementById('f-btc').addEventListener('input', () => {
+  const thb = parseFloat(document.getElementById('f-thb').value);
+  const btc = parseFloat(document.getElementById('f-btc').value);
+  document.getElementById('f-price').value = (!isNaN(thb) && !isNaN(btc) && btc > 0) ? (thb / btc).toFixed(2) : '';
+});
+document.getElementById('usd-rate').addEventListener('input', () => render());
+
+/* ============================================================
+   MARKET DATA FETCH
+   Sources (free, no API key):
+     1. Bitkub  → BTC open price in THB  (Thai exchange, rolling 24h open)
+     2. open.er-api.com → THB/USD forex rate
+     3. CoinGecko → fallback for BTC price
+   ============================================================ */
+async function fetchMarketData() {
+  const btn        = document.getElementById('btn-fetch');
+  const statusEl   = document.getElementById('fetch-status');
+  const bitkubEl   = document.getElementById('src-bitkub');
+  const changeEl   = document.getElementById('src-change');
+
+  btn.classList.add('loading');
+  btn.disabled = true;
+  statusEl.textContent = 'กำลังดึงข้อมูล...';
+  statusEl.className = 'fetch-status';
+
+  let openPrice = null;
+  let lastPrice = null;
+  let usdRate   = null;
+  let source    = '';
+
+  // ── 1. Bitkub: BTC/THB open & last ──────────────────────────
+  try {
+    const res  = await fetchWithTimeout('https://api.bitkub.com/api/market/ticker?sym=THB_BTC', 7000);
+    const data = await res.json();
+    const tk   = data?.result?.THB_BTC;
+    if (tk) {
+      openPrice = tk.open  || tk.last;
+      lastPrice = tk.last;
+      source    = 'Bitkub';
+      const pct = tk.percentChange;
+      bitkubEl.textContent = fmtPrice(lastPrice) + ' THB';
+      changeEl.style.display = '';
+      changeEl.textContent   = (pct >= 0 ? '+' : '') + Number(pct).toFixed(2) + '%';
+      changeEl.style.color   = pct >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+  } catch (_) { /* ตาม fallback */ }
+
+  // ── 2. CoinGecko fallback (ถ้า Bitkub ล้มเหลว) ──────────────
+  if (!openPrice) {
+    try {
+      const res  = await fetchWithTimeout(
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=thb,usd', 7000);
+      const data = await res.json();
+      if (data?.bitcoin?.thb) {
+        openPrice = data.bitcoin.thb;
+        lastPrice = openPrice;
+        source    = 'CoinGecko';
+        bitkubEl.textContent = fmtPrice(openPrice) + ' THB (CoinGecko)';
+        changeEl.style.display = 'none';
+        // derive USD rate from CoinGecko while we're here
+        if (data.bitcoin.usd) usdRate = data.bitcoin.thb / data.bitcoin.usd;
+      }
+    } catch (_) { /* ทั้งหมดล้มเหลว */ }
+  }
+
+  // ── 3. ExchangeRate-API: THB/USD ─────────────────────────────
+  if (!usdRate) {
+    try {
+      const res  = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD', 7000);
+      const data = await res.json();
+      if (data?.rates?.THB) usdRate = data.rates.THB;
+    } catch (_) { /* ใช้ค่าเดิม */ }
+  }
+
+  // ── Apply ────────────────────────────────────────────────────
+  btn.classList.remove('loading');
+  btn.disabled = false;
+
+  if (openPrice) {
+    document.getElementById('open-price').value = Math.round(openPrice);
+    store.openPrice = openPrice;
+  }
+  if (usdRate) {
+    document.getElementById('usd-rate').value = usdRate.toFixed(2);
+    store.usdRate = usdRate;
+  }
+
+  const now = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  if (openPrice) {
+    saveStore(store);
+    render();
+    statusEl.textContent = `อัปเดตเมื่อ ${now} (${source})`;
+    statusEl.className = 'fetch-status ok';
+    showToast('success', 'ดึงราคาสำเร็จ',
+      `ราคาเปิด: ${fmtPrice(openPrice)} THB/BTC\nอัตราแลกเปลี่ยน: ${usdRate ? usdRate.toFixed(2) : '—'} THB/USD`);
+  } else {
+    statusEl.textContent = `ดึงไม่ได้ (${now}) — ตรวจสอบอินเตอร์เน็ต`;
+    statusEl.className = 'fetch-status err';
+    showToast('error', 'ดึงข้อมูลไม่ได้', 'ตรวจสอบการเชื่อมต่ออินเตอร์เน็ต');
+  }
+}
+
+function fetchWithTimeout(url, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+if (store.openPrice > 0) document.getElementById('open-price').value = store.openPrice;
+if (store.usdRate)       document.getElementById('usd-rate').value   = store.usdRate;
+document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+render();
+
+// Auto-fetch on load
+fetchMarketData();
+</script>
+</body>
+</html>
